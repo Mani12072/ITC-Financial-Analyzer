@@ -85,8 +85,8 @@ CREATE TABLE financial_reports (
 - 🧳 Zip DB folder for deployment and reuse
 
 ---
-### Data base
-## 🔍  Chroma Vector Database Setup from ZIP
+## Data base
+###🔍  Chroma Vector Database Setup from ZIP
 
 This project uses a **pre-built Chroma vector database** stored inside a ZIP file.
 
