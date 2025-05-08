@@ -81,7 +81,7 @@ CREATE TABLE financial_reports (
 **Steps**:
 - 🔄 Clean & chunk text using `RecursiveCharacterTextSplitter`
 - ⚙️ Generate embeddings using `sentence-transformers/all-MiniLM-L6-v2`
-- 🗃️ Store in local **Chroma DB** (`CHROMA_DB_BACKUP.zip`)
+- 🗃️ Store in local **Chroma DB** (`CHROMA_DB1zip`)
 - 🧳 Zip DB folder for deployment and reuse
 
 ---
@@ -101,7 +101,7 @@ CREATE TABLE financial_reports (
 
 ---
 
-### 🖼️ 4. Streamlit Chat App (`app.py`)
+### 🖼️ 5. Streamlit Chat App (`app.py`)
 **Goal**: Visual front-end for financial Q&A
 
 **Features**:
