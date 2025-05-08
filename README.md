@@ -2,6 +2,11 @@
 
 An interactive AI tool designed to explore **ITC Ltd’s financial journey** — revenues, profitability, and performance — via a **chat-based interface** powered by **web scraping**, **vector embeddings**, and **LLMs**.
 
+# You can access the Streamlit app from the link below:
+## 📊 [ITC Financial Analyzer APP – AI-Powered Financial Q&A](https://huggingface.co/spaces/Mpavan45/ITC_Financial_Analysis)
+
+##You can explore and interact with the Streamlit application directly via the link above.
+
 ---
 
 ## 🌟 Key Capabilities
