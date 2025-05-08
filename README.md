@@ -85,6 +85,23 @@ CREATE TABLE financial_reports (
 - 🧳 Zip DB folder for deployment and reuse
 
 ---
+### Data base
+## 🔍  Chroma Vector Database Setup from ZIP
+
+This project uses a **pre-built Chroma vector database** stored inside a ZIP file.
+
+- 📁 **ZIP file path**: `src/chroma_db1.zip`
+- 📂 **Unzipped folder path**: `src/chroma_db1/`
+- 🧠 The Chroma DB contains AI-embedded financial data specific to **ITC Ltd.**
+- ⚙️ During execution, the ZIP file is extracted and loaded into memory using LangChain's `Chroma` vector store.
+- 🔒 Make sure the extracted folder is **writable** to avoid `readonly database` errors.
+
+### ✅ Usage Flow
+1. Extract `chroma_db1.zip` into a local folder.
+2. Load the extracted path into `Chroma(persist_directory='src/chroma_db1', ...)`.
+3. Use this vector store as the retriever for your RAG pipeline.
+
+Ensure that your runtime environment has permission to read/write
 
 ### 💬 4. LLM Query Interface (`/llm`)
 **Goal**: Answer natural language questions using **retrieved context**
