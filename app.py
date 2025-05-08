@@ -1,102 +1,117 @@
 import streamlit as st
+import os
 import zipfile
-
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts.chat import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain.schema.runnable import RunnableLambda, RunnablePassthrough
+from langchain.vectorstores import Chroma
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain.prompts import ChatPromptTemplate
 from langchain.schema.output_parser import StrOutputParser
+from langchain.schema.runnable import RunnableLambda
 
-# --- Page Configuration ---
-st.set_page_config(page_title="📈 ITC Ltd. Financial Insight Bot", layout="wide")
-st.markdown("<h1 style='text-align: center; color: #2E8B57;'>💬 Financial Assistant for ITC Ltd.</h1>", unsafe_allow_html=True)
+# Page setup
+st.set_page_config(page_title="Financial QA - ITC Ltd.", layout="wide", initial_sidebar_state="expanded")
 
-# --- Sidebar UI ---
-with st.sidebar:
-    st.header("💼 App Settings")
-    st.markdown("This assistant analyzes ITC Ltd.'s earnings calls & financial transcripts.")
-    st.markdown("---")
-    st.info("Data Source: CHROMA_DB_BACKUP.zip", icon="📦")
-    st.caption("Powered by Gemini | Vector Search via Chroma | Embeddings from HuggingFace")
+# Custom CSS for enhanced UI
+st.markdown("""
+<style>
+    .main { background-color: #f8f9fa; }
+    .header { text-align: center; padding: 20px; background-color: #007bff; color: white; border-radius: 10px; }
+    .stTextInput>input { border-radius: 5px; padding: 10px; }
+    .stButton>button { background-color: #28a745; color: white; border-radius: 5px; padding: 10px; width: 100%; }
+    .answer-box { background-color: #e9ecef; border-radius: 10px; padding: 15px; margin-top: 10px; }
+    .source-expander { background-color: #f1f3f5; border-radius: 5px; }
+    .sidebar .stSelectbox { margin-bottom: 15px; }
+</style>
+""", unsafe_allow_html=True)
 
-# --- Extract Chroma DB ---
-with zipfile.ZipFile("chroma_db1.zip", "r") as zip_ref:
-    zip_ref.extractall("chroma_storage")
+# Header
+with st.container():
+    st.markdown('<div class="header">', unsafe_allow_html=True)
+    st.title("📊 Financial Q&A Chatbot (ITC Ltd.)")
+    st.markdown("Ask financial questions about ITC Ltd. based on transcript data, powered by AI.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Vector DB Setup ---
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-vector_db = Chroma(persist_directory="chroma_storage", embedding_function=embeddings)
-retriever = vector_db.as_retriever(search_type="mmr", search_kwargs={"k": 3, "lambda_mult": 0.7})
 
-# --- Helper: Extract Context ---
-def extract_context(question):
-    documents = retriever.get_relevant_documents(question)
-    content = "\n\n".join(doc.page_content for doc in documents)
-    return {"question": question, "context": content, "docs": documents}
+# Safe way to access secrets
+GOOGLE_API_KEY = st.secrets.get('genai')
 
-# --- Prompt Template ---
-chat_prompt = ChatPromptTemplate.from_messages([
-    ("system", """
-You are a financial analyst bot. Your responses must be derived strictly from the following transcript context: {context}
+embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
+vectorstore = Chroma(persist_directory='chroma_db', embedding_function=embedding)
 
+
+retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 3, "lambda_mult": 1})
+llm = ChatGoogleGenerativeAI(api_key=GOOGLE_API_KEY, model="gemini-1.5-flash", temperature=1)
+parser = StrOutputParser()
+
+# Prompt template
+prompt = ChatPromptTemplate.from_messages([
+    ("system",
+     """You are a domain-specific AI financial analyst focused on company-level performance evaluation.
+Your task is to analyze and respond to user financial queries strictly based on the provided transcript data: {context}.
 Rules:
-- Extract only factual data—avoid assumptions.
-- If data is missing, state: "Required data not found in transcript."
-- Present responses in bullet points where relevant.
-- Tailor insights to ITC Ltd., but keep logic modular for generalization.
-
-Respond concisely to the question below using the context above.
-"""),
-    MessagesPlaceholder(variable_name="chat_history", optional=True),
-    ("human", "{input}")
+1. ONLY extract facts, figures, and insights that are explicitly available in the transcript.
+2. If data is missing or partially available, clearly state: "The required data is not available in the current transcript." Then provide a generic but relevant explanation based on standard financial principles.
+3. Maintain numerical accuracy and avoid interpretation beyond data boundaries.
+4. Prioritize answers relevant to ITC Ltd., but keep response format adaptable to other firms and fiscal years.
+5. Clearly present year-wise or metric-wise insights using bullet points or structured formats if applicable.
+Your goals:
+- Ensure 100% fidelity to source transcript.
+- Do not assume or hallucinate missing numbers.
+- Use clear, reproducible reasoning steps (e.g., show which line items support your conclusion).
+- Output should be modular enough to scale across other companies and time periods.
+Respond only to this question from the user."""
+    ),
+    ("human", "{question}")
 ])
 
-# --- LLM & Chains Setup ---
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7)
-parser = StrOutputParser()
-chat_memory = {"chat_history": []}
+# Helper functions
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
 
-initial_chain = RunnableLambda(lambda x: {"input": x["input"], **extract_context(x["input"])})
-contextual_chain = initial_chain | RunnableLambda(lambda x: {
-    "llm_input": {"input": x["input"], "context": x["context"]},
-    "docs": x["docs"]
-})
-response_chain = contextual_chain | RunnableLambda(lambda x: {
-    "result": (chat_prompt | llm | parser).invoke(x["llm_input"]),
-    "source_documents": x["docs"]
-})
-final_chain = RunnablePassthrough.assign(chat_history=RunnableLambda(lambda _: chat_memory["chat_history"])) | response_chain
+def retrieve_and_answer(question):
+    if not retriever or not llm:
+        return "Cannot process query: Retriever or LLM not initialized.", []
+    docs = retriever.invoke(question)
+    context = format_docs(docs)
+    final_input = {"question": question, "context": context}
+    result = (prompt | llm | parser).invoke(final_input)
+    return result, docs
 
-# --- Chat History Display ---
-for message in chat_memory["chat_history"]:
-    role = "user" if isinstance(message, HumanMessage) else "assistant"
-    with st.chat_message(role):
-        bubble_color = "#E8F0F2" if role == "user" else "#F0F5E1"
-        st.markdown(
-            f"<div style='background-color:{bubble_color}; padding:10px; border-radius:10px;'>{message.content}</div>",
-            unsafe_allow_html=True
-        )
+# Query input form
+col1, col2 = st.columns([4, 1])
 
-# --- Chat Input ---
-user_input = st.chat_input("Type your financial question about ITC Ltd...")
+with col1:
+    query = st.text_input("Enter your question about ITC's financials:", placeholder="e.g., What was ITC's revenue in FY 2023?")
 
-if user_input:
-    with st.chat_message("user"):
-        st.markdown(user_input)
+with col2:
+    clear = st.button("Clear ❌")
 
-    chat_memory["chat_history"].append(HumanMessage(content=user_input))
-    result = final_chain.invoke({"input": user_input})
-    reply = result["result"]
-    sources = result.get("source_documents", [])
+submit_button = st.button("Get Answer ✅")
 
-    chat_memory["chat_history"].append(AIMessage(content=reply))
-    with st.chat_message("assistant"):
-        st.markdown(f"<div style='background-color:#F0F5E1; padding:10px; border-radius:10px;'>{reply}</div>", unsafe_allow_html=True)
+# Clear the input (simulate reset)
+if clear:
+   st.rerun()
 
-        if sources:
-            st.markdown("#### 🔗 Source Documents:")
-            for doc in sources:
-                st.markdown(f"- `{doc.metadata.get('source', 'Unknown')}`")
 
+if submit_button:
+    if not query.strip():
+        st.warning("Please enter a valid question.")
+    elif not GOOGLE_API_KEY:
+        st.error("Google API Key not configured. Set it in Hugging Face Secrets to proceed.")
+    else:
+        with st.spinner("Generating answer..."):
+            try:
+                answer, source_docs = retrieve_and_answer(query)
+                st.markdown('<div class="answer-box">', unsafe_allow_html=True)
+                st.markdown("### ✅ Answer")
+                st.markdown(answer)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                with st.expander("📄 Source Documents", expanded=False):
+                    if source_docs:
+                        for doc in source_docs:
+                            st.markdown(f"- **Source**: {doc.metadata.get('source', 'Unknown document')}")
+                            st.markdown(f"  **Content**: {doc.page_content}")
+                    else:
+                        st.write("No source documents found.")
+            except Exception as e:
+                st.error(f"Error processing query: {str(e)}")
