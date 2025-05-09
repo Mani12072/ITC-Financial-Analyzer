@@ -261,12 +261,12 @@ The Streamlit app integrates all modules (scraper, database, embeddings, LLM) in
 - See requirements.txt for dependencies.
  **Key libraries:**
 
-    tavily: Web scraping
-    sqlite3: Database storage
-    langchain: Embeddings and LLM integration
-    streamlit: Interactive UI
-    google-generativeai: Google Gemini LLM
-    chromadb: Vector storage
+        tavily: Web scraping
+        sqlite3: Database storage
+        langchain: Embeddings and LLM integration
+        streamlit: Interactive UI
+        google-generativeai: Google Gemini LLM
+        chromadb: Vector storage
 
 ## 📝 Notes
 
